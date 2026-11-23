@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ thống Quản lý Thư viện — Lab 02</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">📚</div>
+        <div>
+          <h1>Quản lý Thư viện</h1>
+          <p class="brand-subtitle">Hệ thống theo dõi Mượn · Gia hạn · Trả sách</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <span class="today-badge" id="today-display" aria-label="Ngày hiện tại"></span>
+        <button type="button" class="btn btn-primary" id="btn-open-borrow">
+          + Tạo phiếu mượn
+        </button>
+        <button type="button" class="btn btn-outline-danger" id="btn-reset-data">
+          ↺ Reset dữ liệu mẫu
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <!-- Dashboard thống kê nhanh -->
+    <section class="stats-grid" aria-label="Thống kê nhanh">
+      <article class="stat-card stat-books">
+        <div class="stat-header">
+          <span class="stat-label">Tổng đầu sách</span>
+          <span class="stat-icon" aria-hidden="true">📖</span>
+        </div>
+        <div class="stat-value" id="stat-total-books">0</div>
+        <div class="stat-meta" id="stat-books-meta">0 bản tồn kho / 0 tổng</div>
+      </article>
+
+      <article class="stat-card stat-borrowing">
+        <div class="stat-header">
+          <span class="stat-label">Sách đang mượn</span>
+          <span class="stat-icon" aria-hidden="true">⏳</span>
+        </div>
+        <div class="stat-value" id="stat-borrowing">0</div>
+        <div class="stat-meta">Phiếu đang trong hạn trả</div>
+      </article>
+
+      <article class="stat-card stat-overdue">
+        <div class="stat-header">
+          <span class="stat-label">Sách quá hạn</span>
+          <span class="stat-icon" aria-hidden="true">⚠️</span>
+        </div>
+        <div class="stat-value" id="stat-overdue">0</div>
+        <div class="stat-meta">Cần thu hồi · Chặn gia hạn</div>
+      </article>
+
+      <article class="stat-card stat-returned">
+        <div class="stat-header">
+          <span class="stat-label">Đã trả về</span>
+          <span class="stat-icon" aria-hidden="true">✅</span>
+        </div>
+        <div class="stat-value" id="stat-returned">0</div>
+        <div class="stat-meta">Hoàn tất trả về kho</div>
+      </article>
+    </section>
+
+    <!-- Thanh điều hướng Tab -->
+    <nav class="tabs-nav" role="tablist" aria-label="Chức năng quản lý">
+      <button type="button" class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-loans" id="tab-loans" data-tab="loans">
+        📋 Phiếu mượn <span class="tab-count" id="count-loans">0</span>
+      </button>
+      <button type="button" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-books" id="tab-books" data-tab="books">
+        📚 Kho sách <span class="tab-count" id="count-books">0</span>
+      </button>
+      <button type="button" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-readers" id="tab-readers" data-tab="readers">
+        👥 Độc giả <span class="tab-count" id="count-readers">0</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: QUẢN LÝ PHIẾU MƯỢN -->
+    <section id="panel-loans" class="tab-panel active" role="tabpanel" aria-labelledby="tab-loans">
+      <div class="panel-card">
+        <div class="toolbar">
+          <div class="search-box">
+            <label for="loan-search" class="visually-hidden">Tìm kiếm phiếu mượn</label>
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input type="search" id="loan-search" placeholder="Tìm theo mã phiếu, tên độc giả, tên sách...">
+          </div>
+
+          <div class="filter-pills" role="group" aria-label="Lọc theo trạng thái phiếu mượn">
+            <button type="button" class="pill active" data-loan-filter="all">Tất cả</button>
+            <button type="button" class="pill" data-loan-filter="borrowing">Đang mượn</button>
+            <button type="button" class="pill" data-loan-filter="overdue">Quá hạn</button>
+            <button type="button" class="pill" data-loan-filter="returned">Đã trả về</button>
+          </div>
+        </div>
+
+        <div class="business-rule-banner">
+          <span><strong>Quy tắc:</strong> Mượn mặc định <strong>7 ngày</strong> · Gia hạn tối đa <strong>1 lần (+3 ngày)</strong> khi chưa trả &amp; chưa quá hạn · Trả sách tự động cộng lại <strong>+1 tồn kho</strong>.</span>
+        </div>
+
+        <div tabindex="0" role="region" aria-labelledby="loans-table-caption" class="table-wrapper">
+          <table class="data-table loans-table">
+            <caption id="loans-table-caption" class="visually-hidden">Danh sách phiếu mượn sách</caption>
+            <thead>
+              <tr>
+                <th scope="col">Mã phiếu</th>
+                <th scope="col">Độc giả</th>
+                <th scope="col">Sách mượn</th>
+                <th scope="col">Ngày mượn</th>
+                <th scope="col">Hạn trả</th>
+                <th scope="col">Gia hạn</th>
+                <th scope="col">Ngày trả</th>
+                <th scope="col">Trạng thái</th>
+                <th scope="col" class="col-actions">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="loans-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: QUẢN LÝ KHO SÁCH -->
+    <section id="panel-books" class="tab-panel" role="tabpanel" aria-labelledby="tab-books" hidden>
+      <div class="panel-card">
+        <div class="toolbar">
+          <div class="search-box">
+            <label for="book-search" class="visually-hidden">Tìm kiếm sách</label>
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input type="search" id="book-search" placeholder="Tìm sách theo mã, tên sách, tác giả, thể loại...">
+          </div>
+
+          <div class="toolbar-right">
+            <label for="book-status-filter" class="visually-hidden">Lọc tình trạng sách</label>
+            <select id="book-status-filter" class="select-control">
+              <option value="all">Tất cả tình trạng</option>
+              <option value="Còn kho">Còn kho</option>
+              <option value="Đang mượn">Đang mượn</option>
+              <option value="Hư hỏng">Hư hỏng</option>
+              <option value="Thất lạc">Thất lạc</option>
+            </select>
+            <button type="button" class="btn btn-primary" id="btn-open-book-modal">+ Thêm sách</button>
+          </div>
+        </div>
+
+        <div tabindex="0" role="region" aria-labelledby="books-table-caption" class="table-wrapper">
+          <table class="data-table books-table">
+            <caption id="books-table-caption" class="visually-hidden">Danh mục đầu sách trong thư viện</caption>
+            <thead>
+              <tr>
+                <th scope="col">Mã sách</th>
+                <th scope="col">Tên sách</th>
+                <th scope="col">Tác giả</th>
+                <th scope="col">Thể loại</th>
+                <th scope="col">Tổng SL</th>
+                <th scope="col">Tồn kho</th>
+                <th scope="col">Tình trạng</th>
+                <th scope="col" class="col-actions">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="books-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: QUẢN LÝ ĐỘC GIẢ -->
+    <section id="panel-readers" class="tab-panel" role="tabpanel" aria-labelledby="tab-readers" hidden>
+      <div class="panel-card">
+        <div class="toolbar">
+          <div class="search-box">
+            <label for="reader-search" class="visually-hidden">Tìm kiếm độc giả</label>
+            <span class="search-icon" aria-hidden="true">🔍</span>
+            <input type="search" id="reader-search" placeholder="Tìm độc giả theo mã ĐG, họ tên, lớp / SĐT...">
+          </div>
+
+          <div class="toolbar-right">
+            <button type="button" class="btn btn-primary" id="btn-open-reader-modal">+ Thêm độc giả</button>
+          </div>
+        </div>
+
+        <div tabindex="0" role="region" aria-labelledby="readers-table-caption" class="table-wrapper">
+          <table class="data-table readers-table">
+            <caption id="readers-table-caption" class="visually-hidden">Danh sách độc giả thư viện</caption>
+            <thead>
+              <tr>
+                <th scope="col">Mã ĐG</th>
+                <th scope="col">Họ tên</th>
+                <th scope="col">Lớp / SĐT</th>
+                <th scope="col">Đang mượn</th>
+                <th scope="col">Trạng thái thẻ</th>
+                <th scope="col" class="col-actions">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="readers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL 1: TẠO PHIẾU MƯỢN -->
+  <dialog id="borrow-dialog" closedby="any" aria-labelledby="borrow-dialog-title">
+    <div class="dialog-header">
+      <h2 id="borrow-dialog-title">Tạo phiếu mượn sách</h2>
+      <button type="button" class="btn-icon" data-close-dialog="borrow-dialog" aria-label="Đóng hộp thoại">✕</button>
+    </div>
+    <form id="borrow-form" class="dialog-body" novalidate>
+      <div id="borrow-form-alert" class="form-alert" role="alert" hidden></div>
+
+      <div class="field">
+        <label for="borrow-reader">Độc giả <span class="req">*</span></label>
+        <select id="borrow-reader" name="ma_dg" required data-error="borrow-reader-error" autofocus></select>
+        <div id="borrow-reader-error" class="error-msg">
+          <span role="img" aria-label="Lỗi">❌</span> Vui lòng chọn độc giả mượn sách.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="borrow-book">Sách mượn <span class="req">*</span></label>
+        <span id="borrow-book-hint" class="hint">Sách có tồn kho bằng 0 hoặc hư hỏng/thất lạc sẽ bị chặn mượn.</span>
+        <select id="borrow-book" name="ma_sach" required aria-describedby="borrow-book-hint" data-error="borrow-book-error"></select>
+        <div id="borrow-book-error" class="error-msg">
+          <span role="img" aria-label="Lỗi">❌</span> Vui lòng chọn đầu sách cần mượn.
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="borrow-date">Ngày mượn <span class="req">*</span></label>
+          <input type="date" id="borrow-date" name="ngay_muon" required data-error="borrow-date-error">
+          <div id="borrow-date-error" class="error-msg">
+            <span role="img" aria-label="Lỗi">❌</span> Vui lòng chọn ngày mượn hợp lệ.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="borrow-due-date">Hạn trả dự kiến (+7 ngày)</label>
+          <input type="date" id="borrow-due-date" name="han_tra" readonly>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" data-close-dialog="borrow-dialog">Hủy</button>
+        <button type="submit" class="btn btn-primary">Xác nhận cho mượn</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- MODAL 2: THÊM / SỬA SÁCH -->
+  <dialog id="book-dialog" closedby="any" aria-labelledby="book-dialog-title">
+    <div class="dialog-header">
+      <h2 id="book-dialog-title">Thêm sách mới</h2>
+      <button type="button" class="btn-icon" data-close-dialog="book-dialog" aria-label="Đóng hộp thoại">✕</button>
+    </div>
+    <form id="book-form" class="dialog-body" novalidate>
+      <input type="hidden" id="book-edit-mode" value="">
+      <div id="book-form-alert" class="form-alert" role="alert" hidden></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="book-code">Mã sách <span class="req">*</span></label>
+          <input type="text" id="book-code" name="ma_sach" required placeholder="VD: S007" data-error="book-code-error" autofocus>
+          <div id="book-code-error" class="error-msg">
+            <span role="img" aria-label="Lỗi">❌</span> Vui lòng nhập mã sách.
+          </div>
+        </div>
+        <div class="field">
+          <label for="book-category">Thể loại <span class="req">*</span></label>
+          <input type="text" id="book-category" name="the_loai" required placeholder="VD: Công nghệ thông tin" data-error="book-category-error">
+          <div id="book-category-error" class="error-msg">
+            <span role="img" aria-label="Lỗi">❌</span> Vui lòng nhập thể loại sách.
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="book-title">Tên sách <span class="req">*</span></label>
+        <input type="text" id="book-title" name="ten_sach" required placeholder="VD: Nhập môn Công nghệ Phần mềm" data-error="book-title-error">
+        <div id="book-title-error" class="error-msg">
+          <span role="img" aria-label="Lỗi">❌</span> Vui lòng nhập tên sách.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="book-author">Tác giả <span class="req">*</span></label>
+        <input type="text" id="book-author" name="tac_gia" required placeholder="VD: Ian Sommerville" data-error="book-author-error">
+        <div id="book-author-error" class="error-msg">
+          <span role="img" aria-label="Lỗi">❌</span> Vui lòng nhập tên tác giả.
+        </div>
+      </div>
+
+      <div class="field-row field-row-3">
+        <div class="field">
+          <label for="book-total">Tổng SL <span class="req">*</span></label>
+          <input type="number" id="book-total" name="tong_so_luong" min="1" value="5" required data-error="book-total-error">
+          <div id="book-total-error" class="error-msg">
+            <span role="img" aria-label="Lỗi">❌</span> Nhập số lượng &ge; 1.
+          </div>
+        </div>
+        <div class="field">
+          <label for="book-stock">Tồn kho <span class="req">*</span></label>
+          <input type="number" id="book-stock" name="so_luong_ton" min="0" value="5" required data-error="book-stock-error">
+          <div id="book-stock-error" class="error-msg">
+            <span role="img" aria-label="Lỗi">❌</span> Nhập tồn kho &ge; 0.
+          </div>
+        </div>
+        <div class="field">
+          <label for="book-status">Tình trạng</label>
+          <select id="book-status" name="tinh_trang">
+            <option value="Còn kho">Còn kho</option>
+            <option value="Đang mượn">Đang mượn</option>
+            <option value="Hư hỏng">Hư hỏng</option>
+            <option value="Thất lạc">Thất lạc</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" data-close-dialog="book-dialog">Hủy</button>
+        <button type="submit" class="btn btn-primary">Lưu thông tin sách</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- MODAL 3: THÊM / SỬA ĐỘC GIẢ -->
+  <dialog id="reader-dialog" closedby="any" aria-labelledby="reader-dialog-title">
+    <div class="dialog-header">
+      <h2 id="reader-dialog-title">Thêm độc giả mới</h2>
+      <button type="button" class="btn-icon" data-close-dialog="reader-dialog" aria-label="Đóng hộp thoại">✕</button>
+    </div>
+    <form id="reader-form" class="dialog-body" novalidate>
+      <input type="hidden" id="reader-edit-mode" value="">
+      <div id="reader-form-alert" class="form-alert" role="alert" hidden></div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="reader-code">Mã độc giả <span class="req">*</span></label>
+          <input type="text" id="reader-code" name="ma_dg" required placeholder="VD: DG006" data-error="reader-code-error" autofocus>
+          <div id="reader-code-error" class="error-msg">
+            <span role="img" aria-label="Lỗi">❌</span> Vui lòng nhập mã độc giả.
+          </div>
+        </div>
+        <div class="field">
+          <label for="reader-status">Trạng thái thẻ</label>
+          <select id="reader-status" name="trang_thai_the">
+            <option value="Hoạt động">Hoạt động</option>
+            <option value="Tạm khóa">Tạm khóa</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="reader-name">Họ và tên <span class="req">*</span></label>
+        <input type="text" id="reader-name" name="ho_ten" required placeholder="VD: Nguyễn Văn An" data-error="reader-name-error">
+        <div id="reader-name-error" class="error-msg">
+          <span role="img" aria-label="Lỗi">❌</span> Vui lòng nhập họ tên độc giả.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="reader-contact">Lớp / Số điện thoại <span class="req">*</span></label>
+        <input type="text" id="reader-contact" name="lop_sdt" required placeholder="VD: K28-TPM1 · 0905 123 456" data-error="reader-contact-error">
+        <div id="reader-contact-error" class="error-msg">
+          <span role="img" aria-label="Lỗi">❌</span> Vui lòng nhập lớp hoặc số điện thoại.
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" data-close-dialog="reader-dialog">Hủy</button>
+        <button type="submit" class="btn btn-primary">Lưu độc giả</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- MODAL 4: XÁC NHẬN RESET DỮ LIỆU -->
+  <dialog id="confirm-dialog" closedby="any" aria-labelledby="confirm-dialog-title">
+    <div class="dialog-header">
+      <h2 id="confirm-dialog-title">Xác nhận khôi phục dữ liệu mẫu</h2>
+      <button type="button" class="btn-icon" data-close-dialog="confirm-dialog" aria-label="Đóng hộp thoại">✕</button>
+    </div>
+    <div class="dialog-body">
+      <p id="confirm-dialog-message">
+        Thao tác này sẽ xóa toàn bộ thay đổi hiện tại trong <code>localStorage</code> và khôi phục lại bộ dữ liệu mẫu ban đầu (sách, độc giả và 5 phiếu mượn mẫu). Bạn có chắc chắn muốn tiếp tục?
+      </p>
+      <form method="dialog" class="dialog-footer">
+        <button value="cancel" class="btn btn-secondary" autofocus>Hủy bỏ</button>
+        <button value="confirm" class="btn btn-danger">Khôi phục ngay</button>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Toast notifications -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
